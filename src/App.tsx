@@ -15,7 +15,7 @@ export default function App() {
     <div className="app">
       <header className="bar">
         <h1>Shape Multiplier</h1>
-        <span className="tag">M2 · engine &amp; Repeat</span>
+        <span className="tag">M3 · rule chain</span>
         <div className="bar-actions">
           {PRESETS.map((p) => (
             <button key={p.id} type="button" className="btn" onClick={() => loadPreset(p.id)}>{p.name} preset</button>

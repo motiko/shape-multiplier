@@ -1,5 +1,9 @@
 import type { Figure, Instance, Layer, Rect, Rule } from "../model/types";
 import { applyRepeat } from "./rules/repeat";
+import { applyMirror } from "./rules/mirror";
+import { applyRing } from "./rules/ring";
+import { applyGrid } from "./rules/grid";
+import { outputCount } from "./rules";
 
 /** Hard limit on instances per layer. Rules past the one that hits it are skipped. */
 export const INSTANCE_CAP = 5000;
@@ -8,20 +12,19 @@ export type RuleResult = {
   instances: Instance[];
   /** Index of the rule that hit INSTANCE_CAP, or null when nothing was cut. */
   cappedAtRule: number | null;
+  /** Instance count after each rule (before capping). Rules skipped after the cap keep their predicted count. */
+  counts: number[];
 };
 
 const ZERO_RECT: Rect = { x: 0, y: 0, width: 0, height: 0 };
 
 /** One rule: placements in, more placements out. Pure. */
-export function applyRule(input: Instance[], rule: Rule, bbox: Rect): Instance[] {
+export function applyRule(input: Instance[], rule: Rule, bbox: Rect, limit = Infinity): Instance[] {
   switch (rule.kind) {
-    case "repeat":
-      return applyRepeat(input, rule, bbox);
-    // Mirror, Ring and Grid arrive in M3; until then they pass placements through.
-    case "mirror":
-    case "ring":
-    case "grid":
-      return input;
+    case "repeat": return applyRepeat(input, rule, bbox, limit);
+    case "mirror": return applyMirror(input, rule, bbox, limit);
+    case "ring": return applyRing(input, rule, bbox, limit);
+    case "grid": return applyGrid(input, rule, bbox, limit);
   }
 }
 
@@ -29,16 +32,17 @@ export function applyRule(input: Instance[], rule: Rule, bbox: Rect): Instance[]
 export function runRules(layer: Layer, bbox: Rect): RuleResult {
   let instances: Instance[] = [{ figureId: layer.figureId, matrix: layer.base, order: 0 }];
   let cappedAtRule: number | null = null;
+  const counts: number[] = [];
+  let predicted = 1; // uncapped count, so skipped rules still show their real multiplier
   for (let i = 0; i < layer.rules.length; i++) {
-    const next = applyRule(instances, layer.rules[i], bbox);
-    if (next.length > INSTANCE_CAP) {
-      instances = next.slice(0, INSTANCE_CAP);
-      cappedAtRule = i;
-      break;
-    }
-    instances = next;
+    const rule = layer.rules[i];
+    predicted = outputCount(rule, predicted);
+    counts.push(predicted);
+    if (cappedAtRule !== null) continue; // skipped: only predict
+    instances = applyRule(instances, rule, bbox, INSTANCE_CAP); // builds at most INSTANCE_CAP, never the whole explosion
+    if (predicted > INSTANCE_CAP) cappedAtRule = i;
   }
-  return { instances, cappedAtRule };
+  return { instances, cappedAtRule, counts };
 }
 
 const cache = new WeakMap<Layer, { bbox: Rect; result: RuleResult }>();

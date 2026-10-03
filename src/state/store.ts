@@ -21,6 +21,8 @@ type State = {
   addRule: (layerId: string, rule: Rule) => void;
   updateRule: (layerId: string, index: number, patch: Partial<Rule>) => void;
   removeRule: (layerId: string, index: number) => void;
+  /** Move a rule within its layer's chain. Out-of-range targets are clamped. */
+  moveRule: (layerId: string, from: number, to: number) => void;
   /** Rescale and recenter a layer's base so every instance fits the canvas. */
   fitLayer: (layerId: string, fill?: number) => void;
   /** Import the preset's figure (reusing a same-named one), place it, add its rules, fit it. */
@@ -84,6 +86,17 @@ export const useStore = create<State>((set, get) => ({
   removeRule: (layerId, index) =>
     set((s) => ({
       layers: s.layers.map((l) => (l.id === layerId ? { ...l, rules: l.rules.filter((_, i) => i !== index) } : l)),
+    })),
+
+  moveRule: (layerId, from, to) =>
+    set((s) => ({
+      layers: s.layers.map((l) => {
+        if (l.id !== layerId || from === to || from < 0 || from >= l.rules.length) return l;
+        const rules = [...l.rules];
+        const [rule] = rules.splice(from, 1);
+        rules.splice(Math.max(0, Math.min(rules.length, to)), 0, rule);
+        return { ...l, rules };
+      }),
     })),
 
   fitLayer: (layerId, fill = 0.8) => {

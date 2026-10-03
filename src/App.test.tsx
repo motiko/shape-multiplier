@@ -60,7 +60,7 @@ describe("App", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /load the samples/i }));
     expect(screen.getByText(/1 instance$/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /\+ repeat/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^\+ repeat$/i }));
     expect(screen.getByText(/11 instances/)).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText("count"), { target: { value: "4" } });
@@ -75,5 +75,60 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: /remove repeat rule/i }));
     expect(useStore.getState().layers[0].rules).toHaveLength(0);
     expect(screen.getByText(/1 instance$/)).toBeTruthy();
+  });
+
+  it("builds a rule chain: add all four kinds, reorder, and remove", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /load the samples/i }));
+    for (const k of ["repeat", "mirror", "ring", "grid"]) fireEvent.click(screen.getByRole("button", { name: new RegExp(`^\\+ ${k}$`, "i") }));
+
+    let rules = useStore.getState().layers[0].rules;
+    expect(rules.map((r) => r.kind)).toEqual(["repeat", "mirror", "ring", "grid"]);
+    // 11 → 22 → 132 → 1188
+    expect(screen.getByText("→ 1188")).toBeTruthy();
+    expect(screen.getByText(/1188 instances/)).toBeTruthy();
+    // every rule has its own form
+    expect(screen.getByLabelText("axis")).toBeTruthy();
+    expect(screen.getByLabelText("radius")).toBeTruthy();
+    expect(screen.getByLabelText("columns")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: /move grid rule up/i }));
+    fireEvent.click(screen.getByRole("button", { name: /move repeat rule down/i }));
+    rules = useStore.getState().layers[0].rules;
+    expect(rules.map((r) => r.kind)).toEqual(["mirror", "repeat", "grid", "ring"]);
+    expect((screen.getByRole("button", { name: /move mirror rule up/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /move ring rule down/i }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: /remove mirror rule/i }));
+    expect(useStore.getState().layers[0].rules.map((r) => r.kind)).toEqual(["repeat", "grid", "ring"]);
+    expect(screen.getByText(/594 instances/)).toBeTruthy();
+  });
+
+  it("shows which rule hit the cap and marks later rules as skipped", () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /load the samples/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^\+ grid$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^\+ grid$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^\+ mirror$/i }));
+    fireEvent.change(screen.getAllByLabelText("columns")[0], { target: { value: "20" } });
+    fireEvent.change(screen.getAllByLabelText("rows")[0], { target: { value: "20" } });
+    fireEvent.change(screen.getAllByLabelText("columns")[1], { target: { value: "20" } });
+
+    expect(document.querySelector(".count")!.textContent).toBe("5000 instances · capped at 5000 by rule 2");
+    expect(screen.getByText("→ 24000 · capped")).toBeTruthy(); // 400 × (20 × 3)
+    expect(screen.getByText("skipped")).toBeTruthy();
+  });
+
+  it("the store clamps moveRule and ignores unknown layers", () => {
+    useStore.getState().addFigure({ id: "f", name: "sq", pathData: "M0 0H1V1H0Z", bbox: { x: 0, y: 0, width: 1, height: 1 }, warnings: [] });
+    const id = useStore.getState().layers[0].id;
+    const { addRule, moveRule } = useStore.getState();
+    addRule(id, { kind: "mirror", axis: "x" });
+    addRule(id, { kind: "grid", cols: 1, rows: 1, gap: 0 });
+    moveRule(id, 0, 99);
+    expect(useStore.getState().layers[0].rules.map((r) => r.kind)).toEqual(["grid", "mirror"]);
+    moveRule("nope", 0, 1);
+    moveRule(id, 5, 0);
+    expect(useStore.getState().layers[0].rules.map((r) => r.kind)).toEqual(["grid", "mirror"]);
   });
 });

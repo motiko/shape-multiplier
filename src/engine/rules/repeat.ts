@@ -36,14 +36,15 @@ export function stepMatrix(rule: Repeat, bbox: Rect): Matrix {
  * The step is applied in figure space, so a "center" pivot means each copy
  * rotates and grows about its own figure center regardless of earlier rules.
  */
-export function applyRepeat(input: Instance[], rule: Repeat, bbox: Rect): Instance[] {
+export function applyRepeat(input: Instance[], rule: Repeat, bbox: Rect, limit = Infinity): Instance[] {
   const count = Math.max(0, Math.floor(rule.count));
   const step = stepMatrix(rule, bbox);
   const out: Instance[] = [];
   for (const inst of input) {
     let m = inst.matrix;
+    if (out.length >= limit) break;
     out.push({ figureId: inst.figureId, matrix: m, order: out.length });
-    for (let i = 1; i <= count; i++) {
+    for (let i = 1; i <= count && out.length < limit; i++) {
       m = compose(m, step);
       out.push({ figureId: inst.figureId, matrix: m, order: out.length });
     }
