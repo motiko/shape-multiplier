@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, act, cleanup } from "@testing-library/react";
 import App from "./App";
-import { useStore } from "./state/store";
+import { useStore, resetStore } from "./state/store";
 import { applyRules } from "./engine/applyRules";
 import { instancesBounds } from "./engine/bounds";
 import { scaleOf } from "./engine/matrix";
@@ -9,7 +9,7 @@ import { scaleOf } from "./engine/matrix";
 describe("App", () => {
   afterEach(cleanup);
   beforeEach(() => {
-    useStore.setState({ figures: {}, layers: [], selectedLayerId: null, error: null });
+    resetStore();
   });
 
   it("loads samples, places the first one as a layer, and shows it in both panels", () => {
@@ -33,7 +33,7 @@ describe("App", () => {
 
   it("spiral preset places a square with one Repeat rule that fits the canvas", () => {
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /spiral preset/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^spiral$/i }));
 
     const { figures, layers, canvas } = useStore.getState();
     expect(layers).toHaveLength(1);
@@ -51,7 +51,7 @@ describe("App", () => {
     expect(Math.max(b.width, b.height)).toBeCloseTo(canvas.width * 0.8, 3);
     expect(screen.getByText(/11 instances/)).toBeTruthy();
     // loading it twice reuses the square figure
-    fireEvent.click(screen.getByRole("button", { name: /spiral preset/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^spiral$/i }));
     expect(Object.keys(useStore.getState().figures)).toHaveLength(1);
     expect(useStore.getState().layers).toHaveLength(2);
   });
@@ -114,7 +114,7 @@ describe("App", () => {
     fireEvent.change(screen.getAllByLabelText("rows")[0], { target: { value: "20" } });
     fireEvent.change(screen.getAllByLabelText("columns")[1], { target: { value: "20" } });
 
-    expect(document.querySelector(".count")!.textContent).toBe("5000 instances · capped at 5000 by rule 2");
+    expect(document.querySelector(".rules .count")!.textContent).toBe("5000 instances · capped at 5000 by rule 2");
     expect(screen.getByText("→ 24000 · capped")).toBeTruthy(); // 400 × (20 × 3)
     expect(screen.getByText("skipped")).toBeTruthy();
   });

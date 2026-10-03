@@ -138,10 +138,7 @@ export function RulePanel() {
   if (!layer) return <p className="hint">Select a layer to edit its rules.</p>;
   const { instances, cappedAtRule, counts } = applyRulesDetailed(layer, figures[layer.figureId]);
 
-  const add = (kind: Rule["kind"]) => {
-    addRule(layer.id, defaultRule(kind));
-    fitLayer(layer.id);
-  };
+  const add = (kind: Rule["kind"]) => addRule(layer.id, defaultRule(kind), true);
 
   return (
     <div className="rules">

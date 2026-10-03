@@ -46,4 +46,23 @@ describe("parseSvg", () => {
     expect(shapeToPathData(rect)).toContain("A2 2 0 0 1");
     expect(shapeToPathData(line)).toBe("M1 2L3 4");
   });
+
+  it("resolves local <use href=\"#id\"> with x/y and transform, and warns on external ones", () => {
+    const fig = parseSvg(`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+      <defs><path id="sq" d="M0 0H10V10H0Z"/></defs>
+      <use href="#sq"/>
+      <use href="#sq" x="20" y="0"/>
+      <use xlink:href="#sq" transform="translate(0 20) scale(2)"/>
+      <use href="other.svg#sq"/>
+    </svg>`);
+    expect(fig.pathData.match(/M/g)).toHaveLength(3);
+    expect(fig.bbox).toEqual({ x: 0, y: 0, width: 30, height: 40 });
+    expect(fig.warnings).toEqual(["use"]);
+  });
+
+  it("does not loop on a <use> that references its own ancestor", () => {
+    const fig = parseSvg(`<svg xmlns="http://www.w3.org/2000/svg"><g id="g"><rect width="1" height="1"/><use href="#g"/></g></svg>`);
+    expect(fig.warnings).toEqual(["use"]);
+    expect(fig.bbox.width).toBe(1);
+  });
 });

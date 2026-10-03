@@ -1,6 +1,6 @@
 /**
  * SVG → Figure. Supports path, rect, circle, ellipse, line, polyline, polygon,
- * nested <g> with transform attributes, and <use> of local symbols is NOT supported (warned).
+ * nested <g> with transform attributes, and <use href="#id"> of local elements (as our SVG export writes).
  * All geometry is flattened into one absolute path string in the root user space.
  */
 import type { Figure, Matrix } from "../model/types";
@@ -60,17 +60,29 @@ export function shapeToPathData(el: Element): string | null {
   }
 }
 
-function walk(el: Element, ctm: Matrix, cmds: Cmd[], warnings: Set<string>) {
+const XLINK = "http://www.w3.org/1999/xlink";
+const MAX_USE_DEPTH = 16;
+
+function walk(el: Element, ctm: Matrix, cmds: Cmd[], warnings: Set<string>, depth = 0) {
   const name = el.localName;
   if (IGNORED.has(name)) return;
   const local = compose(ctm, parseTransform(el.getAttribute("transform")));
   if (CONTAINERS.has(name)) {
-    for (const child of Array.from(el.children)) walk(child, local, cmds, warnings);
+    for (const child of Array.from(el.children)) walk(child, local, cmds, warnings, depth);
     return;
   }
   if (SUPPORTED.has(name)) {
     const d = shapeToPathData(el);
     if (d) cmds.push(...transformPath(parsePath(d), local));
+    return;
+  }
+  if (name === "use") {
+    // local references only (#id), as written by our own SVG export
+    const href = el.getAttribute("href") ?? el.getAttributeNS(XLINK, "href") ?? el.getAttribute("xlink:href");
+    const target = href?.startsWith("#") ? el.ownerDocument.querySelector(`[id="${CSS.escape(href.slice(1))}"]`) : null;
+    if (!target || depth >= MAX_USE_DEPTH) { warnings.add("use"); return; }
+    const placed = compose(local, [1, 0, 0, 1, num(el, "x"), num(el, "y")]);
+    walk(target, placed, cmds, warnings, depth + 1);
     return;
   }
   warnings.add(name);
